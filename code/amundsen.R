@@ -1,14 +1,11 @@
-library(rvest); library(stringr); 
+library(rvest); library(xml2); library(stringr); 
 library(tidyverse); library(tidyselect)
 
-year <- seq(1890, 1920, 1) %>% as.character()
-month <- c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
-month_day <-  paste(rep(month, each = length(seq(1, 31, 1))), seq(1, 31, 1), sep = " ")
-temp <- paste0(seq(-100, 100, 0.1), "º F")
-lat_1_1 <- paste0(seq(1,180, 1), "º")
-lat_1_2 <- paste0("lat.", seq(1,180, 1), "º")
-lat_2_1 <- paste0(" ", seq(1,180, 1), "'")
-lat_2_2 <- paste0(" ", seq(1,180, 1), "' S.")
+
+lat_1_1 <- paste0(seq(1,90, 1), "º")
+lat_1_2 <- paste0("lat.", seq(1,90, 1), "º")
+lat_2_1 <- paste0(" ", seq(1,90, 1), "'")
+lat_2_2 <- paste0(" ", seq(1,90, 1), "' S.")
 lat_1 <- paste(rep(lat_1_1, each = length(lat_2_2)), lat_2_2, sep = "")
 lat_2 <- paste(rep(lat_1_2, each = length(lat_2_1)), lat_2_1, sep = "")
 lat <- c(lat_1, lat_2)
@@ -17,19 +14,33 @@ lat <- c(lat_1, lat_2)
 amundsenJournal_html <- read_html("https://www.gutenberg.org/files/4229/4229-h/4229-h.htm")
 
 amundsenJournal_df <- amundsenJournal_html %>% 
-  html_nodes("p") %>% html_text(trim = TRUE) %>% 
+  html_nodes("h1, h2, h3, h4, p") %>% html_text(trim = TRUE) %>% 
   as.data.frame() %>% rename(paragraph=1) %>% 
   mutate(paragraph=str_replace_all(paragraph, "\r\n", " "),
-         paragraph=str_replace_all(paragraph, "\\\"", ""))
+         paragraph=str_replace_all(paragraph, "\\\"", ""),
+         paragraph=paragraph %>% tolower(),
+         paragraph=ifelse(paragraph=="chapter v", "chapter v:", paragraph))
 
-amundsenJournal_df <- amundsenJournal_df %>% 
-  mutate(year=str_extract_all(paragraph, year %>% paste(collapse="|"), simplify = FALSE),
-         month=str_extract_all(paragraph, month %>% paste(collapse="|"), simplify = FALSE),
-         month_day=str_extract_all(paragraph, month_day %>% paste(collapse="|"), simplify = FALSE),
-         temp=str_extract_all(paragraph, temp %>% paste(collapse="|"), simplify = FALSE),
-         lat=str_extract_all(paragraph, lat %>% paste(collapse="|"), simplify = FALSE)
-         )
+amundsenJournal_df_t <- amundsenJournal_df %>% 
+  mutate(chapter=str_extract_all(paragraph, paste("chapter ", seq(1, 16, 1) %>% as.roman() %>% tolower(), ":", sep="", collapse="|"), simplify = TRUE) %>% 
+           as.character() %>% na_if("") %>% str_remove_all(":"), .before=paragraph) %>% 
+  fill(chapter, .direction="down") %>% 
+  filter(str_detect(chapter, paste("chapter", seq(5, 14, 1) %>% as.roman() %>% tolower(), collapse="|")) & str_length(paragraph)>50) %>% 
+  mutate(year=str_extract_all(paragraph, seq(1872, 1912, 1) %>% 
+                                paste(collapse="|"), simplify = FALSE))
+,
+         month=str_extract_all(paragraph, month.name %>% tolower() %>% 
+                                 paste(collapse="|"), simplify = FALSE),
+         month_day=str_extract_all(paragraph, paste(rep(month.name %>% tolower(), each = length(seq(1, 31, 1))), seq(1, 31, 1), sep = "") %>% 
+                                     paste(collapse="|"), simplify = FALSE),
+         day_year=str_extract_all(paragraph, paste(rep(seq(1, 31, 1), length(seq(1, 31, 1))), seq(1872, 1912, 1), sep=",") %>% 
+                                          paste(collapse="|"), simplify = FALSE))
+,
+         temp=str_extract_all(paragraph, paste0(seq(-100, 100, 0.1), "ºF") %>% 
+                                paste(collapse="|"), simplify = FALSE),
+         ) %>% fill(chapter, .direction="down")
 
+lat=str_extract_all(paragraph, lat %>% paste(collapse="|"), simplify = FALSE)
 
 
 ,
