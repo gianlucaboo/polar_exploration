@@ -2,15 +2,6 @@ library(rvest); library(xml2); library(stringr);
 library(tidyverse); library(tidyselect)
 
 
-lat_1_1 <- paste0(seq(1,90, 1), "º")
-lat_1_2 <- paste0("lat.", seq(1,90, 1), "º")
-lat_2_1 <- paste0(" ", seq(1,90, 1), "'")
-lat_2_2 <- paste0(" ", seq(1,90, 1), "' S.")
-lat_1 <- paste(rep(lat_1_1, each = length(lat_2_2)), lat_2_2, sep = "")
-lat_2 <- paste(rep(lat_1_2, each = length(lat_2_1)), lat_2_1, sep = "")
-lat <- c(lat_1, lat_2)
-
-
 amundsenJournal_html <- read_html("https://www.gutenberg.org/files/4229/4229-h/4229-h.htm")
 
 amundsenJournal_df <- amundsenJournal_html %>% 
@@ -22,35 +13,28 @@ amundsenJournal_df <- amundsenJournal_html %>%
          paragraph=ifelse(paragraph=="chapter v", "chapter v:", paragraph))
 
 amundsenJournal_df_t <- amundsenJournal_df %>% 
+  #extract chapters end filter chapters five to fourteen
   mutate(chapter=str_extract_all(paragraph, paste("chapter ", seq(1, 16, 1) %>% as.roman() %>% tolower(), ":", sep="", collapse="|"), simplify = TRUE) %>% 
            as.character() %>% na_if("") %>% str_remove_all(":"), .before=paragraph) %>% 
   fill(chapter, .direction="down") %>% 
   filter(str_detect(chapter, paste("chapter", seq(5, 14, 1) %>% as.roman() %>% tolower(), collapse="|")) & str_length(paragraph)>50) %>% 
-  mutate(year=str_extract_all(paragraph, seq(1872, 1912, 1) %>% 
-                                paste(collapse="|"), simplify = FALSE))
-,
-         month=str_extract_all(paragraph, month.name %>% tolower() %>% 
-                                 paste(collapse="|"), simplify = FALSE),
-         month_day=str_extract_all(paragraph, paste(rep(month.name %>% tolower(), each = length(seq(1, 31, 1))), seq(1, 31, 1), sep = "") %>% 
-                                     paste(collapse="|"), simplify = FALSE),
-         day_year=str_extract_all(paragraph, paste(rep(seq(1, 31, 1), length(seq(1, 31, 1))), seq(1872, 1912, 1), sep=",") %>% 
-                                          paste(collapse="|"), simplify = FALSE))
-,
-         temp=str_extract_all(paragraph, paste0(seq(-100, 100, 0.1), "ºF") %>% 
-                                paste(collapse="|"), simplify = FALSE),
-         ) %>% fill(chapter, .direction="down")
+  #extract years
+  mutate(year=str_extract_all(paragraph, seq(1872, 1912, 1) %>% paste(collapse="|"), simplify = F), 
+         year=ifelse(year=="character(0)", NA_character_, year),
+  #extract month and year
+  month=str_extract_all(paragraph, month.name %>% tolower() %>% paste(collapse="|"), simplify = F),
+  month=ifelse(month=="character(0)", NA_character_, month),
+  month_day=str_extract_all(paragraph, paste0(month.name %>% tolower(), "\\s\\d{1,2}", collapse="|"), simplify = F),
+  month_day=ifelse(month_day=="character(0)", NA_character_, month_day),
+  day=str_extract_all(paragraph, "\\d{1,2}th", simplify = F),
+  day=ifelse(day=="character(0)", NA_character_, day),
+  temp=str_extract_all(paragraph, "\\S{1}\\d*\\S{1}\\d*º\\s*f|\\S{1}\\d*\\S{1}\\d*º\\s*c", simplify = F) %>% lapply(., function(x){str_remove_all(x, "\\s*")}),
+  temp=ifelse(temp=="character(0)", NA_character_, temp),
+  lat=str_extract_all(paragraph, "\\w*\\.*\\w*º\\s*\\d*\\.*\\d*\\'*\\s*s+|\\w*\\.*\\w*º\\s*\\d*\\.*\\d*\\'*\\s*n+", simplify = F),
+  long=str_extract_all(paragraph, "\\w*\\.*\\w*º\\s*\\d*\\.*\\d*\\'*\\s*e+\d*\W*\d+º\s*\d*\.*\d*\'*\s*e+|\\w*\\.*\\w*º\\s*\\d*\\.*\\d*\\'*\\s*w+", simplify = F)),
+  pressure_ridge=str_extract_all(paragraph, "[pressure ridge]"))
 
-lat=str_extract_all(paragraph, lat %>% paste(collapse="|"), simplify = FALSE)
 
-
-,
-day=regmatches(paragraph, gregexpr(month[1], paragraph)),
-numeric=regmatches(paragraph, gregexpr('[0-9]+',paragraph)))
-
-month_length=str_length(month),
-day=substring(sentence, first=regexpr(pattern=month, text=sentence)+month_length))
-
-str_length(month))
 
 long=ifelse(str_detect(.$sentence, "long | Long | longitude | Longitude"), 1, 0),
 lat=ifelse(str_detect(.$sentence, "lat | Lat | latitude | Latitude"), 1, 0),
